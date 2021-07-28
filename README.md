@@ -16,8 +16,8 @@ After installing AWS CLI, it is required to create multiple profiles {in case mu
 	3. Reads the file and copies it to a variable
 	4. Revokes the existing permissions of the specified security group
 	5. Adds the new IP to the specified security group
-2. You can specify the security group id/name and use those variables in the comand
+2. You can specify the security group id by replacing sg-xxxxxxxx with your security group id
 3. You can add multiple port access to your ip by copying the last line and replacing the port number
-4. Don't forget to modify the profile name before using it
+4. Don't forget to modify the profile name yyyyyyy with your aws profile before using it
 
 Happy Hacking..!! You just saved 3 minutes of your time by avoiding the whole UI related operations
