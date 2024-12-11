@@ -1,23 +1,140 @@
-## How to setup the script
+# AWS Security Group Rule Manager
 
-You’ll need an IAM user which has the permission to edit security groups attached to the ec2 instance. We need the IAM Access key and Secret key to run this script. 
+This script manages AWS Security Group rules by:
+- Adding or updating rules for specified ports and tags.
+- Removing older rules with the same tag but mismatched CIDR blocks.
+- Tagging the rules for easy identification and management.
 
-### Pre-requisites
-AWS-cli installed. If not, get it from here [AWS CLI](https://aws.amazon.com/cli/)
+## Features
 
-### Setting up
-After installing AWS CLI, it is required to create multiple profiles {in case multiple accounts of AWS are needed}. Refer [this link](https://stackoverflow.com/questions/593334/how-to-use-multiple-aws-accounts-from-the-command-line) to setup multiple accounts/profiles in AWS CLI.
+- Dynamically fetches your public IP for CIDR-based rule updates.
+- Ensures no duplicate rules are created.
+- Automatically removes outdated rules for specified ports and tags.
+- Supports multiple rules with custom tags for each.
 
-### Editing the script for your own use case
+---
 
-1. The script performs the following actions
-	1. Pulls out your public IP from the web
-	2. Adds "/32" after it and saves it to a file
-	3. Reads the file and copies it to a variable
-	4. Revokes the existing permissions of the specified security group
-	5. Adds the new IP to the specified security group
-2. You can specify the security group id by replacing sg-xxxxxxxx with your security group id
-3. You can add multiple port access to your ip by copying the last line and replacing the port number
-4. Don't forget to modify the profile name yyyyyyy with your aws profile before using it
+## Prerequisites
 
-Happy Hacking..!! You just saved 3 minutes of your time by avoiding the whole UI related operations
+1. **AWS CLI**: Install and configure the AWS CLI. Follow [this guide](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) if it's not already set up.
+   ```bash
+   aws configure
+   ```
+
+2. **jq**: Install `jq` for JSON parsing:
+   - macOS: `brew install jq`
+   - Ubuntu: `sudo apt-get install jq`
+   - Windows: Use the [jq binary](https://stedolan.github.io/jq/download/).
+
+3. **IAM Permissions**: Ensure your AWS CLI profile has the following permissions:
+   - `ec2:DescribeSecurityGroupRules`
+   - `ec2:AuthorizeSecurityGroupIngress`
+   - `ec2:RevokeSecurityGroupIngress`
+   - `ec2:CreateTags`
+
+---
+
+## Setup
+
+1. Clone or download the script:
+   ```bash
+   git clone https://github.com/your-repo/aws-security-group-rule-manager.git
+   cd aws-security-group-rule-manager
+   ```
+
+2. Update the script variables:
+   - Open the script in a text editor:
+     ```bash
+     nano update-Ip-ValetEZ-new.sh
+     ```
+   - Update the following variables:
+     ```bash
+     SECURITY_GROUP_ID="sg-070912c0108c0cfb6"  # Replace with your Security Group ID
+     AWS_PROFILE="your-profile-name"          # Replace with your AWS CLI profile name (leave empty if default)
+     ```
+
+3. Define your rules:
+   - Add rules in the `RULES_TO_CONFIGURE` array. Each rule consists of:
+     - The port number.
+     - A tag key-value pair for the rule.
+   - Example:
+     ```bash
+     RULES_TO_CONFIGURE=(
+         "22:RuleType=shehzad-ssh-access"
+         "3306:RuleType=shehzad-mysql-access"
+     )
+     ```
+
+---
+
+## How to Run
+
+1. Make the script executable:
+   ```bash
+   chmod +x update-Ip-ValetEZ-new.sh
+   ```
+
+2. Run the script:
+   ```bash
+   ./update-Ip-ValetEZ-new.sh
+   ```
+
+---
+
+## Script Workflow
+
+1. **Fetch Rules**:
+   - Retrieves all existing rules for the specified security group.
+
+2. **Check for Existing Rules**:
+   - If a rule with the same port, protocol, CIDR, and tag exists, it skips updating.
+
+3. **Remove Older Rules**:
+   - Deletes rules with matching ports and tags but mismatched CIDRs.
+
+4. **Add or Update Rules**:
+   - Adds a new rule if no matching rule exists.
+   - Tags the rule with the specified key-value pair.
+
+---
+
+## Example Output
+
+### When Adding a New Rule:
+```plaintext
+Updating rule for Port: 22, Tag: RuleType=shehzad-ssh-access, IP: 223.233.81.192/32...
+Adding or updating rule for Port: 22, IP: 223.233.81.192/32...
+Tagging rule: sgr-0e68ff6d12e50646f with RuleType=shehzad-ssh-access...
+Rule created and tagged successfully.
+```
+
+### When Removing an Outdated Rule:
+```plaintext
+Updating rule for Port: 22, Tag: RuleType=shehzad-ssh-access, IP: 223.233.81.192/32...
+Deleting older rules with Port: 22, Tag: RuleType=shehzad-ssh-access and mismatched CIDR...
+Deleted rule ID: sgr-0123456789abcdef0
+Adding or updating rule for Port: 22, IP: 223.233.81.192/32...
+Tagging rule: sgr-0e68ff6d12e50646f with RuleType=shehzad-ssh-access...
+Rule created and tagged successfully.
+```
+
+### When No Changes Are Needed:
+```plaintext
+Updating rule for Port: 3306, Tag: RuleType=shehzad-mysql-access, IP: 223.233.81.192/32...
+Rule with Port: 3306, Tag: RuleType=shehzad-mysql-access already exists. Skipping update.
+```
+
+---
+
+## Notes
+
+- The script works with **inbound rules** only. Modify for outbound rules if needed.
+- Ensure your security group has enough room for new rules (up to 50).
+- The `jq` tool is critical for filtering rules. Ensure it is installed and functional.
+
+---
+
+## License
+
+This script is open-source and available under the MIT License.
+
