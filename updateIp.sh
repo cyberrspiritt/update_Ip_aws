@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Configuration
-SECURITY_GROUP_ID="sg-xxxxxxxxx"  # Replace with your single SG ID
-AWS_PROFILE=${1:-}                    # Optional AWS profile
+SECURITY_GROUP_IDS=("sg-xxxxxxxxxxxxx" "sg-xxxxxxxxxxxxxx")  # Replace with your Security Group IDs
+AWS_PROFILE="my-profile"                    # Optional AWS profile
 PROTOCOL="tcp"                           # Protocol (default: tcp)
 CIDR=$(curl -s https://checkip.amazonaws.com)/32  # Current public IP CIDR
 
@@ -20,11 +20,12 @@ RULES_TO_CONFIGURE=(
 
 # Function to update or tag an existing rule
 update_rule() {
-    local PORT=$1
-    local TAG_KEY=$(echo "$2" | awk -F= '{print $1}')
-    local TAG_VALUE=$(echo "$2" | awk -F= '{print $2}')
+    local SECURITY_GROUP_ID=$1
+    local PORT=$2
+    local TAG_KEY=$(echo "$3" | awk -F= '{print $1}')
+    local TAG_VALUE=$(echo "$3" | awk -F= '{print $2}')
 
-    echo "Updating rule for Port: $PORT, Tag: $TAG_KEY=$TAG_VALUE, IP: $CIDR..."
+    echo "Updating rule for Security Group: $SECURITY_GROUP_ID, Port: $PORT, Tag: $TAG_KEY=$TAG_VALUE, IP: $CIDR..."
 
     # Fetch all rules for the security group
     ALL_RULES=$(aws ec2 describe-security-group-rules \
@@ -39,7 +40,7 @@ update_rule() {
 
     # Delete older rules if any
     if [[ -n "$RULE_IDS_TO_DELETE" ]]; then
-        echo "Deleting older rules with Port: $PORT, Tag: $TAG_KEY=$TAG_VALUE, IP: $CIDR and mismatched CIDR..."
+        echo "Deleting older rules for Security Group: $SECURITY_GROUP_ID, Port: $PORT, Tag: $TAG_KEY=$TAG_VALUE and mismatched CIDR..."
         for RULE_ID in $RULE_IDS_TO_DELETE; do
             aws ec2 revoke-security-group-ingress \
                 --group-id "$SECURITY_GROUP_ID" \
@@ -48,7 +49,7 @@ update_rule() {
             echo "Deleted rule ID: $RULE_ID"
         done
     else
-        echo "No older rules to delete for Port: $PORT, Tag: $TAG_KEY=$TAG_VALUE."
+        echo "No older rules to delete for Security Group: $SECURITY_GROUP_ID, Port: $PORT, Tag: $TAG_KEY=$TAG_VALUE."
     fi
 
     # Check if a rule exists with matching CIDR, port, and tag
@@ -56,12 +57,12 @@ update_rule() {
         ".[] | select(.FromPort == $PORT and .ToPort == $PORT and .IpProtocol == \"$PROTOCOL\" and .CidrIpv4 == \"$CIDR\" and .Tags[]?.Key == \"$TAG_KEY\" and .Tags[]?.Value == \"$TAG_VALUE\") | .SecurityGroupRuleId")
 
     if [[ -n "$RULE_ID" ]]; then
-        echo "Rule with Port: $PORT, Tag: $TAG_KEY=$TAG_VALUE already exists. Skipping update."
+        echo "Rule already exists for Security Group: $SECURITY_GROUP_ID, Port: $PORT, Tag: $TAG_KEY=$TAG_VALUE. Skipping update."
         return
     fi
 
     # Add or update the rule
-    echo "Adding or updating rule for Port: $PORT, IP: $CIDR..."
+    echo "Adding or updating rule for Security Group: $SECURITY_GROUP_ID, Port: $PORT, IP: $CIDR..."
     RULE_OUTPUT=$(aws ec2 authorize-security-group-ingress \
         --group-id "$SECURITY_GROUP_ID" \
         $PROFILE_FLAG \
@@ -86,9 +87,11 @@ update_rule() {
     fi
 }
 
-# Main execution: Iterate through RULES_TO_CONFIGURE
-for RULE in "${RULES_TO_CONFIGURE[@]}"; do
-    IFS=":" read -r PORT TAG <<< "$RULE"
-    update_rule "$PORT" "$TAG"
+# Main execution: Iterate through SECURITY_GROUP_IDS and RULES_TO_CONFIGURE
+for SECURITY_GROUP_ID in "${SECURITY_GROUP_IDS[@]}"; do
+    for RULE in "${RULES_TO_CONFIGURE[@]}"; do
+        IFS=":" read -r PORT TAG <<< "$RULE"
+        update_rule "$SECURITY_GROUP_ID" "$PORT" "$TAG"
+    done
 done
 
